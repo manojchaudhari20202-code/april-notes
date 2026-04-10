@@ -1134,3 +1134,283 @@ SoftReference<byte[]> buffer = new SoftReference<>(new byte[1024 * 1024]);
 byte[] data = buffer.get(); // may be null if GC'd
 if (data == null) data = loadData();
 ```
+
+---
+
+## 41. Collections & Data Structures — Best Practices
+
+### Declaration: Always Use Interface Types
+```java
+// Good — program to the interface
+List<String>   list = new ArrayList<>();
+Set<String>    set  = new HashSet<>();
+Map<String, Integer> map = new HashMap<>();
+Deque<String>  deque = new ArrayDeque<>();
+
+// Bad — locks you into implementation
+ArrayList<String> list = new ArrayList<>();
+```
+
+---
+
+### Choosing the Right List
+| Scenario | Use | Reason |
+|---|---|---|
+| Random access by index | `ArrayList` | O(1) get |
+| Frequent add/remove at head/tail | `ArrayDeque` | O(1) both ends; faster than LinkedList |
+| Frequent insert/delete in middle | `LinkedList` | O(1) insert with iterator, but poor cache locality |
+| Thread-safe, read-heavy | `CopyOnWriteArrayList` | Lock-free reads; full copy on write |
+| Sorted, unique | `TreeSet` (not a List) | Maintained order, O(log n) ops |
+| Fixed-size from array | `Arrays.asList()` | No add/remove; backed by array |
+| True immutable | `List.of()` (Java 9+) | Throws on any mutation |
+
+> **Prefer `ArrayDeque` over `LinkedList`** for stack/queue — better memory locality, no node overhead.
+
+---
+
+### Choosing the Right Map
+| Scenario | Use | Note |
+|---|---|---|
+| General key-value | `HashMap` | O(1) avg; unordered |
+| Preserve insertion order | `LinkedHashMap` | O(1); iteration order = insert order |
+| Sorted by key | `TreeMap` | O(log n); implements `NavigableMap` |
+| Enum keys | `EnumMap` | Array-backed; most efficient |
+| Concurrent access | `ConcurrentHashMap` | Segment locking; never `Hashtable` |
+| Count occurrences | `HashMap` + `merge` | See idiom below |
+| Bidirectional lookup | Guava `BiMap` | Or maintain two maps manually |
+| LRU cache | `LinkedHashMap` (access-order) | Override `removeEldestEntry` |
+
+```java
+// Count word frequency
+Map<String, Integer> freq = new HashMap<>();
+for (String word : words) {
+    freq.merge(word, 1, Integer::sum);    // cleaner than getOrDefault
+}
+
+// LRU Cache using LinkedHashMap
+Map<K, V> lru = new LinkedHashMap<>(capacity, 0.75f, true) {
+    protected boolean removeEldestEntry(Map.Entry<K,V> e) {
+        return size() > capacity;
+    }
+};
+```
+
+---
+
+### Choosing the Right Set
+| Scenario | Use |
+|---|---|
+| Fast membership test | `HashSet` — O(1) |
+| Maintain insertion order | `LinkedHashSet` |
+| Sorted unique elements | `TreeSet` — O(log n), implements `NavigableSet` |
+| Enum values | `EnumSet` — bitfield, ultra-fast |
+| Thread-safe | `CopyOnWriteArraySet` (read-heavy) or `Collections.synchronizedSet` |
+
+```java
+// EnumSet — prefer over HashSet for enums
+EnumSet<DayOfWeek> weekend = EnumSet.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
+EnumSet<DayOfWeek> weekdays = EnumSet.complementOf(weekend);
+```
+
+---
+
+### Queue & Deque
+
+```java
+// Use ArrayDeque as Stack (not java.util.Stack which extends Vector)
+Deque<Integer> stack = new ArrayDeque<>();
+stack.push(1);          // addFirst
+stack.pop();            // removeFirst
+stack.peek();           // peekFirst
+
+// Use ArrayDeque as Queue (not LinkedList)
+Queue<String> queue = new ArrayDeque<>();
+queue.offer("a");       // addLast
+queue.poll();           // removeFirst — returns null if empty (vs remove() throws)
+queue.peek();           // peekFirst
+
+// PriorityQueue — min-heap by default
+PriorityQueue<Integer> minHeap = new PriorityQueue<>();
+PriorityQueue<Integer> maxHeap = new PriorityQueue<>(Comparator.reverseOrder());
+minHeap.offer(5); minHeap.offer(1); minHeap.offer(3);
+minHeap.poll();   // 1 — always smallest
+
+// Priority by custom field
+PriorityQueue<Task> pq = new PriorityQueue<>(Comparator.comparingInt(Task::getPriority));
+```
+
+---
+
+### Immutable & Unmodifiable Collections
+
+```java
+// Java 9+ — truly immutable (no nulls, no duplicates in Set)
+List<String>        immList = List.of("a", "b", "c");
+Set<String>         immSet  = Set.of("x", "y");
+Map<String, Integer> immMap = Map.of("one", 1, "two", 2);
+Map<String, Integer> immMap2 = Map.ofEntries(
+    Map.entry("one", 1), Map.entry("two", 2)
+);
+List<String> copy = List.copyOf(existingList);  // defensive copy, immutable
+
+// Unmodifiable view (wraps mutable — original can still change)
+List<String> view = Collections.unmodifiableList(mutableList);
+
+// Defensive copy pattern — expose immutable view of internal state
+public List<String> getItems() {
+    return List.copyOf(this.items);   // not Collections.unmodifiableList — that's a view
+}
+```
+
+---
+
+### Sorting & Ordering
+
+```java
+// Comparable — natural ordering (implement in the class)
+class Employee implements Comparable<Employee> {
+    public int compareTo(Employee o) {
+        return Integer.compare(this.id, o.id);  // use Integer.compare, not subtraction
+    }
+}
+
+// Comparator — external, multiple orderings
+Comparator<Employee> byName   = Comparator.comparing(Employee::getName);
+Comparator<Employee> byAge    = Comparator.comparingInt(Employee::getAge);
+Comparator<Employee> combined = byName.thenComparingInt(Employee::getAge);
+Comparator<Employee> reversed = byName.reversed();
+Comparator<Employee> nullSafe = Comparator.nullsFirst(byName);
+
+list.sort(combined);
+list.sort(Comparator.comparing(Employee::getName, String.CASE_INSENSITIVE_ORDER));
+
+// NEVER use subtraction in comparators — integer overflow bug
+// Bad:  (a, b) -> a.age - b.age
+// Good: Comparator.comparingInt(Employee::getAge)
+```
+
+---
+
+### Map Iteration & Manipulation
+
+```java
+Map<String, Integer> map = new HashMap<>();
+
+// Iterate entries
+for (Map.Entry<String, Integer> e : map.entrySet()) {
+    System.out.println(e.getKey() + "=" + e.getValue());
+}
+map.forEach((k, v) -> System.out.println(k + "=" + v));  // Java 8+
+
+// Safe get with default
+int val = map.getOrDefault("key", 0);
+
+// Compute patterns (Java 8+)
+map.putIfAbsent("key", 0);
+map.computeIfAbsent("key", k -> new ArrayList<>());      // great for Map<K, List<V>>
+map.computeIfPresent("key", (k, v) -> v + 1);
+map.compute("key", (k, v) -> v == null ? 1 : v + 1);
+map.merge("key", 1, Integer::sum);                       // most concise for counting
+map.replaceAll((k, v) -> v * 2);
+
+// Group into Map<K, List<V>>
+Map<String, List<Employee>> byDept =
+    employees.stream().collect(Collectors.groupingBy(Employee::getDepartment));
+```
+
+---
+
+### Collection Operations & Algorithms
+
+```java
+// Set operations (non-destructive)
+Set<String> union = new HashSet<>(setA);
+union.addAll(setB);
+
+Set<String> intersection = new HashSet<>(setA);
+intersection.retainAll(setB);
+
+Set<String> difference = new HashSet<>(setA);
+difference.removeAll(setB);
+
+// Bulk collection ops
+list.removeIf(s -> s.isEmpty());            // in-place filter (Java 8+)
+list.replaceAll(String::toUpperCase);       // in-place transform (Java 8+)
+
+// Binary search (list must be sorted)
+int idx = Collections.binarySearch(sortedList, target);
+int idx2 = Collections.binarySearch(list, target, comparator);
+
+// Frequency & disjoint
+int count = Collections.frequency(list, "value");
+boolean noCommon = Collections.disjoint(listA, listB);
+
+// Min/Max
+Optional<String> max = list.stream().max(Comparator.naturalOrder());
+String min = Collections.min(list);
+```
+
+---
+
+### equals() & hashCode() Contract
+
+Critical for correct behavior in `HashMap`, `HashSet`, `Hashtable`:
+
+1. If `a.equals(b)` → `a.hashCode() == b.hashCode()` (mandatory)
+2. If `a.hashCode() == b.hashCode()` → `a.equals(b)` may be false (collision OK)
+3. `hashCode()` must be **consistent** within a single run
+4. `equals()` must be **reflexive, symmetric, transitive, consistent**, and handle `null`
+
+```java
+// Records auto-generate correct equals/hashCode based on all components
+record Point(int x, int y) {}
+
+// Manual (using Objects utility)
+@Override
+public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Employee e)) return false;
+    return id == e.id && Objects.equals(name, e.name);
+}
+
+@Override
+public int hashCode() {
+    return Objects.hash(id, name);   // varargs — handles nulls
+}
+```
+
+> Never use **mutable fields** in `hashCode` for objects stored in a `HashSet`/`HashMap` — mutating the key corrupts the bucket lookup.
+
+---
+
+### Common Collection Pitfalls
+
+| Pitfall | Problem | Fix |
+|---|---|---|
+| `Arrays.asList()` then `add()`  | `UnsupportedOperationException` — fixed size | Use `new ArrayList<>(Arrays.asList(...))` |
+| `List.of()` then `add()` | `UnsupportedOperationException` | It's immutable by design |
+| Modifying list during for-each | `ConcurrentModificationException` | Use `removeIf()` or `Iterator.remove()` |
+| `HashMap` in concurrent code | Data corruption / infinite loop (Java 7) | Use `ConcurrentHashMap` |
+| `==` on Integer > 127 | `false` due to cache boundary | Always use `.equals()` |
+| `LinkedList` random access | O(n) per get — slow | Use `ArrayList` or `ArrayDeque` |
+| Subtraction in Comparator | Integer overflow | Use `Integer.compare()` |
+| Null key in `TreeMap` | `NullPointerException` on compare | Use `HashMap` or null-safe Comparator |
+| Storing mutable key in `HashSet` | Lost entry after mutation | Use immutable keys |
+| Large `initial capacity` in `HashMap` | Wastes memory | Default 16 is fine unless size is known |
+
+---
+
+### Time & Space Complexity Reference
+
+| Collection | get | add | remove | contains | Ordered |
+|---|---|---|---|---|---|
+| `ArrayList` | O(1) | O(1) amort. | O(n) | O(n) | Insertion |
+| `LinkedList` | O(n) | O(1) ends | O(1) w/iter | O(n) | Insertion |
+| `ArrayDeque` | O(1) ends | O(1) amort. | O(1) ends | O(n) | Insertion |
+| `HashSet` | — | O(1) avg | O(1) avg | O(1) avg | No |
+| `LinkedHashSet` | — | O(1) avg | O(1) avg | O(1) avg | Insertion |
+| `TreeSet` | — | O(log n) | O(log n) | O(log n) | Sorted |
+| `HashMap` | O(1) avg | O(1) avg | O(1) avg | O(1) avg | No |
+| `LinkedHashMap` | O(1) avg | O(1) avg | O(1) avg | O(1) avg | Insertion |
+| `TreeMap` | O(log n) | O(log n) | O(log n) | O(log n) | Sorted |
+| `PriorityQueue` | O(n) | O(log n) | O(log n) | O(n) | Heap order |
