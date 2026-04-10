@@ -58,12 +58,84 @@ try (InputStream is = new FileInputStream(file)) {
 
 ## 5. Collections & Generics
 
+### Core Guidelines
 - Use **generics** to ensure type safety — avoid raw types
 - Prefer `List`, `Set`, `Map` interfaces over concrete types in declarations
 - Use `Collections.unmodifiableList()` / `List.of()` for immutable collections
 - Use `EnumSet`/`EnumMap` when keys are enums
 - Choose the right collection: `ArrayList` (random access), `LinkedList` (frequent insert/delete), `HashMap` (fast lookup), `TreeMap` (sorted)
 - Use `isEmpty()` not `size() == 0`
+
+### List Implementations
+| Implementation | When to Use | Time Complexity |
+|---|---|---|
+| `ArrayList` | Random access, frequent reads | O(1) get, O(n) add/remove |
+| `LinkedList` | Frequent insert/delete at ends | O(n) get, O(1) add/remove ends |
+| `Vector` | Legacy thread-safe (avoid) | Similar to ArrayList + sync |
+| `CopyOnWriteArrayList` | Read-heavy, rare writes | O(n) write, snapshot reads |
+
+### Set Implementations
+| Implementation | When to Use | Ordering | Null Allowed |
+|---|---|---|---|
+| `HashSet` | Fast unique elements, no order needed | Unordered | One null |
+| `LinkedHashSet` | Unique + insertion order | Insertion order | One null |
+| `TreeSet` | Unique + sorted order | Natural/Comparator | No null |
+| `EnumSet` | Enum constants only | Declaration order | No null |
+
+### Map Implementations
+| Implementation | When to Use | Ordering | Thread-Safe |
+|---|---|---|---|
+| `HashMap` | General purpose, fast lookup | Unordered | No |
+| `LinkedHashMap` | Insertion order + LRU cache | Insertion order | No |
+| `TreeMap` | Sorted keys, range queries | Sorted | No |
+| `ConcurrentHashMap` | High concurrency | Unordered | Yes |
+| `EnumMap` | Enum keys | Declaration order | No |
+| `WeakHashMap` | Cache with GC-friendly keys | Unordered | No |
+
+### Queue & Deque Implementations
+| Implementation | When to Use | Bounded | Thread-Safe |
+|---|---|---|---|
+| `ArrayDeque` | Stack/queue, fast ends | No | No |
+| `LinkedList` | Queue operations needed | No | No |
+| `PriorityQueue` | Priority ordering, heap | No | No |
+| `ArrayBlockingQueue` | Bounded producer-consumer | Yes | Yes |
+| `LinkedBlockingQueue` | Unbounded producer-consumer | Optional | Yes |
+| `ConcurrentLinkedQueue` | Non-blocking concurrent | No | Yes |
+
+### Collection Performance Tips
+- **ArrayList**: Pre-size with `new ArrayList<>(expectedSize)` to avoid resizing
+- **HashMap**: Use initial capacity `= (int) (expectedSize / 0.75f) + 1` to avoid rehashing
+- **StringBuilder**: Use for string concatenation in loops, not `+`
+- **Arrays vs Lists**: Use `Arrays.asList()` for fixed-size views, `new ArrayList<>(Arrays.asList())` for modifiable
+- **Iteration**: Enhanced for-loop or streams preferred over `Iterator` unless removing elements
+
+### Collection Utility Methods
+```java
+// Immutable collections (Java 9+)
+List<String> immutable = List.of("a", "b", "c");
+Set<Integer> immutableSet = Set.of(1, 2, 3);
+Map<String, Integer> immutableMap = Map.of("key1", 1, "key2", 2);
+
+// Collections class utilities
+Collections.emptyList() / singletonList(item) / unmodifiableList(list)
+Collections.emptySet() / singleton(item) / unmodifiableSet(set)
+Collections.emptyMap() / singletonMap(k, v) / unmodifiableMap(map)
+
+// Common operations
+Collections.sort(list) / reverse(list) / shuffle(list)
+Collections.binarySearch(list, key) // requires sorted list
+Collections.max(collection) / min(collection)
+Collections.frequency(collection, element)
+Collections.disjoint(c1, c2) // true if no common elements
+```
+
+### Generics Best Practices
+- Use diamond operator: `Map<String, List<Integer>> map = new HashMap<>()`
+- Use bounded type parameters: `<T extends Comparable<T>>`
+- PECS principle: Producer Extends, Consumer Super
+- Avoid raw types: `List list = new ArrayList()` → `List<String> list = new ArrayList<>()`
+- Use `? extends T` for read-only, `? super T` for write-only parameters
+- Consider `Collections.checkedList()` for runtime type safety in critical code
 
 ---
 
